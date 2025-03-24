@@ -9,6 +9,28 @@ import 'package:flutter/services.dart';
 import 'controllers/pdf_controller.dart';
 
 void main() {
+  // 만료일 체크
+  final expiryDate = DateTime(2025, 4, 30);
+  final now = DateTime.now();
+  
+  if (now.isAfter(expiryDate)) {
+    showDialog(
+      context: Get.context!,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('앱 만료'),
+        content: const Text('시험기간이 지났습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => exit(0),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+    exit(0);
+  }
+
   WidgetsFlutterBinding.ensureInitialized();
   // 가로 화면으로 고정
   SystemChrome.setPreferredOrientations([
