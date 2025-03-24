@@ -12,6 +12,7 @@ class PdfController extends GetxController {
   final RxString _currentFile = ''.obs;
   final RxInt _currentIndex = 0.obs;
   final RxDouble _zoomLevel = 1.0.obs;
+  static const int maxHistorySize = 20;
 
   List<String> get folders => _folders;
   List<String> get pdfFiles => _pdfFiles;
@@ -78,7 +79,7 @@ class PdfController extends GetxController {
       _pdfFiles.value = files;
       _filteredFiles.value = files;
 
-      // title.pdf 파일이 있다면 첫 번째로 설정
+      // title.pdf 파일이 있다면 첫 번째로 설정하고 자동으로 선택
       final titleIndex = _pdfFiles.indexWhere((file) => 
           file.toLowerCase().endsWith('title.pdf'));
       if (titleIndex != -1) {
@@ -87,7 +88,11 @@ class PdfController extends GetxController {
         _pdfFiles.insert(0, titleFile);
         _filteredFiles.value = List.from(_pdfFiles);
         _currentIndex.value = 0;
+        setCurrentFile(titleFile);
         print('Found title.pdf at index $titleIndex, moved to first position');
+      } else if (_pdfFiles.isNotEmpty) {
+        // title.pdf가 없는 경우 첫 번째 파일 선택
+        setCurrentFile(_pdfFiles.first);
       }
 
       update();
@@ -126,10 +131,12 @@ class PdfController extends GetxController {
   }
 
   void setCurrentFile(String file) {
-    _currentFile.value = file;
-    _currentIndex.value = _filteredFiles.indexOf(file);
-    _addToHistory(file);
-    update();
+    if (_currentFile.value != file) {
+      _currentFile.value = file;
+      _currentIndex.value = _filteredFiles.indexOf(file);
+      _addToHistory(file);
+      update();
+    }
   }
 
   void _addToHistory(String file) {
@@ -137,6 +144,13 @@ class PdfController extends GetxController {
     if (_historyIndex.value < _history.length - 1) {
       _history.removeRange(_historyIndex.value + 1, _history.length);
     }
+
+    // 히스토리 크기가 최대 크기를 초과하면 가장 오래된 항목 제거
+    if (_history.length >= maxHistorySize) {
+      _history.removeAt(0);
+      _historyIndex.value = _history.length - 1;
+    }
+
     _history.add(file);
     _historyIndex.value = _history.length - 1;
   }
@@ -144,14 +158,18 @@ class PdfController extends GetxController {
   void goBack() {
     if (_historyIndex.value > 0) {
       _historyIndex.value--;
-      setCurrentFile(_history[_historyIndex.value]);
+      _currentFile.value = _history[_historyIndex.value];
+      _currentIndex.value = _filteredFiles.indexOf(_currentFile.value);
+      update();
     }
   }
 
   void goForward() {
     if (_historyIndex.value < _history.length - 1) {
       _historyIndex.value++;
-      setCurrentFile(_history[_historyIndex.value]);
+      _currentFile.value = _history[_historyIndex.value];
+      _currentIndex.value = _filteredFiles.indexOf(_currentFile.value);
+      update();
     }
   }
 } 
