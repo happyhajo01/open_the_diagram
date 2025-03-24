@@ -239,7 +239,7 @@ class PdfViewerPage extends StatelessWidget {
                   controller: searchController,
                   maxLength: 20,
                   decoration: InputDecoration(
-                    hintText: '파일 검색...',
+                    hintText: '칼럼 검색...',
                     prefixIcon: const Icon(Icons.search_rounded),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
