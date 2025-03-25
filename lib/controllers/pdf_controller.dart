@@ -18,14 +18,16 @@ class PdfController extends GetxController {
   Map<String, dynamic>? gtWordData;
   static const int maxHistorySize = 20;
 
-  List<String> get folders => folders;
-  List<String> get pdfFiles => pdfFiles;
-  List<String> get filteredFiles => filteredFiles;
-  String get currentFolder => currentFolder.value;
-  String get currentFile => currentFile.value;
   int get currentIndex => _currentIndex.value;
   double get zoomLevel => _zoomLevel.value;
   set zoomLevel(double value) => _zoomLevel.value = value;
+
+  // 초기 PDF 줌 레벨을 설정하는 메서드
+  void setInitialZoomLevel(double pageWidth, double pageHeight, double viewerWidth, double viewerHeight) {
+    final widthRatio = viewerWidth / pageWidth;
+    final heightRatio = viewerHeight / pageHeight;
+    _zoomLevel.value = heightRatio < widthRatio ? heightRatio : widthRatio;
+  }
 
   @override
   void onInit() {
@@ -83,11 +85,15 @@ class PdfController extends GetxController {
       
       // GT 폴더가 선택되었을 때 기본 PDF 파일 설정
       if (folder == 'GT' && files.isNotEmpty) {
-        final defaultFile = files.firstWhere(
-          (file) => file.contains('1. GTLX_GTSS ELEC DIAGRAM'),
-          orElse: () => files.first,
+        // TITLE 페이지를 찾아서 먼저 로드
+        final titleFile = files.firstWhere(
+          (file) => file.toLowerCase().contains('title'),
+          orElse: () => files.firstWhere(
+            (file) => file.contains('1. GTLX_GTSS ELEC DIAGRAM'),
+            orElse: () => files.first,
+          ),
         );
-        currentFile.value = defaultFile;
+        currentFile.value = titleFile;
       }
     } catch (e) {
       print(e);
