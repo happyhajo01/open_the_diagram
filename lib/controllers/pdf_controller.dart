@@ -3,22 +3,26 @@ import 'package:get/get.dart';
 import 'dart:convert';
 
 class PdfController extends GetxController {
-  final RxList<String> _folders = <String>[].obs;
-  final RxList<String> _pdfFiles = <String>[].obs;
-  final RxList<String> _filteredFiles = <String>[].obs;
+  final RxList<String> folders = <String>[].obs;
+  final RxList<String> pdfFiles = <String>[].obs;
+  final RxList<String> filteredFiles = <String>[].obs;
   final RxList<String> _history = <String>[].obs;
   final RxInt _historyIndex = (-1).obs;
-  final RxString _currentFolder = ''.obs;
-  final RxString _currentFile = ''.obs;
+  final RxString currentFolder = ''.obs;
+  final RxString currentFile = ''.obs;
   final RxInt _currentIndex = 0.obs;
   final RxDouble _zoomLevel = 1.0.obs;
+  final RxList<Map<String, dynamic>> keywordSearchResults = <Map<String, dynamic>>[].obs;
+  final RxString searchKeyword = ''.obs;
+  final RxString keywordSearchText = ''.obs;
+  Map<String, dynamic>? gtWordData;
   static const int maxHistorySize = 20;
 
-  List<String> get folders => _folders;
-  List<String> get pdfFiles => _pdfFiles;
-  List<String> get filteredFiles => _filteredFiles;
-  String get currentFolder => _currentFolder.value;
-  String get currentFile => _currentFile.value;
+  List<String> get folders => folders;
+  List<String> get pdfFiles => pdfFiles;
+  List<String> get filteredFiles => filteredFiles;
+  String get currentFolder => currentFolder.value;
+  String get currentFile => currentFile.value;
   int get currentIndex => _currentIndex.value;
   double get zoomLevel => _zoomLevel.value;
   set zoomLevel(double value) => _zoomLevel.value = value;
@@ -27,113 +31,86 @@ class PdfController extends GetxController {
   void onInit() {
     super.onInit();
     loadFolders();
+    loadGtWordJson();
+  }
+
+  Future<void> loadGtWordJson() async {
+    try {
+      final String jsonContent = await rootBundle.loadString('assets/diagrams/GT/gt_word.json');
+      gtWordData = json.decode(jsonContent);
+    } catch (e) {
+      print('Error loading gt_word.json: $e');
+    }
   }
 
   Future<void> loadFolders() async {
     try {
       final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = Map<String, dynamic>.from(
-        json.decode(manifestContent) as Map,
-      );
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
       
-      final folderSet = manifestMap.keys
+      final Set<String> folderSet = manifestMap.keys
           .where((String key) => key.startsWith('assets/diagrams/'))
-          .map((String key) => key.split('/')[2])
+          .map((String path) {
+            final parts = path.split('/');
+            return parts.length > 2 ? parts[2] : '';
+          })
+          .where((String folder) => folder.isNotEmpty)
           .toSet();
       
-      _folders.value = folderSet.toList();
+      folders.value = folderSet.toList();
       
-      // 폴더가 없으면 기본 폴더 추가
-      if (_folders.isEmpty) {
-        _folders.add('WBVF');
-      }
-      
-      // 첫 번째 폴더 자동 선택
-      if (_folders.isNotEmpty) {
-        setCurrentFolder(_folders.first);
+      if (folders.isEmpty) {
+        folders.add('GT');
       }
     } catch (e) {
-      print('Error loading folders: $e');
+      print(e);
+      folders.add('GT');
     }
   }
 
-  Future<void> setCurrentFolder(String folder) async {
-    _currentFolder.value = folder;
-    _currentIndex.value = 0;
-    _history.clear();
-    _historyIndex.value = -1;
-    
+  Future<void> loadPdfFiles(String folder) async {
+    currentFolder.value = folder;
     try {
       final manifestContent = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = Map<String, dynamic>.from(
-        json.decode(manifestContent) as Map,
-      );
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
       
-      final files = manifestMap.keys
-          .where((String key) => 
-              key.startsWith('assets/diagrams/$folder/') && 
-              key.toLowerCase().endsWith('.pdf'))
+      final List<String> files = manifestMap.keys
+          .where((String key) => key.startsWith('assets/diagrams/$folder/') && key.endsWith('.pdf'))
           .toList();
       
-      print('Found files in $folder: $files');
-      _pdfFiles.value = files;
-      _filteredFiles.value = files;
-
-      // title.pdf 파일이 있다면 첫 번째로 설정하고 자동으로 선택
-      final titleIndex = _pdfFiles.indexWhere((file) => 
-          file.toLowerCase().endsWith('title.pdf'));
-      if (titleIndex != -1) {
-        final titleFile = _pdfFiles[titleIndex];
-        _pdfFiles.removeAt(titleIndex);
-        _pdfFiles.insert(0, titleFile);
-        _filteredFiles.value = List.from(_pdfFiles);
-        _currentIndex.value = 0;
-        setCurrentFile(titleFile);
-        print('Found title.pdf at index $titleIndex, moved to first position');
-      } else if (_pdfFiles.isNotEmpty) {
-        // title.pdf가 없는 경우 첫 번째 파일 선택
-        setCurrentFile(_pdfFiles.first);
+      pdfFiles.value = files;
+      filteredFiles.value = files;
+      
+      // GT 폴더가 선택되었을 때 기본 PDF 파일 설정
+      if (folder == 'GT' && files.isNotEmpty) {
+        final defaultFile = files.firstWhere(
+          (file) => file.contains('1. GTLX_GTSS ELEC DIAGRAM'),
+          orElse: () => files.first,
+        );
+        currentFile.value = defaultFile;
       }
-
-      update();
     } catch (e) {
-      print('Error loading PDF files: $e');
+      print(e);
     }
   }
 
   void filterFiles(String keyword) {
     if (keyword.isEmpty) {
-      _filteredFiles.value = List.from(_pdfFiles);
-      final titleIndex = _filteredFiles.indexWhere((file) => 
-          file.toLowerCase().endsWith('title.pdf'));
-      if (titleIndex != -1) {
-        final titleFile = _filteredFiles[titleIndex];
-        _filteredFiles.removeAt(titleIndex);
-        _filteredFiles.insert(0, titleFile);
-        _currentIndex.value = 0;
-      }
-    } else {
-      final keywordLower = keyword.toLowerCase();
-      _filteredFiles.value = _pdfFiles
-          .where((file) => file.toLowerCase().contains(keywordLower))
-          .toList();
-      
-      final titleIndex = _filteredFiles.indexWhere((file) => 
-          file.toLowerCase().endsWith('title.pdf'));
-      if (titleIndex != -1) {
-        final titleFile = _filteredFiles[titleIndex];
-        _filteredFiles.removeAt(titleIndex);
-        _filteredFiles.insert(0, titleFile);
-        _currentIndex.value = 0;
-      }
+      filteredFiles.value = pdfFiles;
+      return;
     }
-    update();
+
+    final lowerKeyword = keyword.toLowerCase();
+    filteredFiles.value = pdfFiles.where((file) {
+      final fileName = file.split('/').last.toLowerCase();
+      return fileName.contains(lowerKeyword);
+    }).toList();
   }
 
   void setCurrentFile(String file) {
-    if (_currentFile.value != file) {
-      _currentFile.value = file;
-      _currentIndex.value = _filteredFiles.indexOf(file);
+    if (currentFile.value != file) {
+      currentFile.value = file;
+      _currentIndex.value = filteredFiles.indexOf(file);
       _addToHistory(file);
       update();
     }
@@ -158,8 +135,8 @@ class PdfController extends GetxController {
   void goBack() {
     if (_historyIndex.value > 0) {
       _historyIndex.value--;
-      _currentFile.value = _history[_historyIndex.value];
-      _currentIndex.value = _filteredFiles.indexOf(_currentFile.value);
+      currentFile.value = _history[_historyIndex.value];
+      _currentIndex.value = filteredFiles.indexOf(currentFile.value);
       update();
     }
   }
@@ -167,9 +144,34 @@ class PdfController extends GetxController {
   void goForward() {
     if (_historyIndex.value < _history.length - 1) {
       _historyIndex.value++;
-      _currentFile.value = _history[_historyIndex.value];
-      _currentIndex.value = _filteredFiles.indexOf(_currentFile.value);
+      currentFile.value = _history[_historyIndex.value];
+      _currentIndex.value = filteredFiles.indexOf(currentFile.value);
       update();
     }
+  }
+
+  void searchKeywords(String keyword) {
+    if (gtWordData == null || keyword.isEmpty) {
+      keywordSearchResults.clear();
+      return;
+    }
+
+    final lowerKeyword = keyword.toLowerCase();
+    final results = <Map<String, dynamic>>[];
+
+    gtWordData!.forEach((colName, keywords) {
+      if (keywords is List) {
+        for (var keyword in keywords) {
+          if (keyword.toString().toLowerCase().contains(lowerKeyword)) {
+            results.add({
+              'col_name': colName,
+              'col_keyword': keyword,
+            });
+          }
+        }
+      }
+    });
+
+    keywordSearchResults.value = results;
   }
 } 
