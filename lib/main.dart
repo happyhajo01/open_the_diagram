@@ -108,7 +108,7 @@ class PdfViewerPage extends StatelessWidget {
     final searchController = TextEditingController();
     OverlayEntry? overlayEntry;
 
-    void showSearchResults(BuildContext context, RenderBox box) {
+    void showSearchResults(BuildContext context, RenderBox box, bool isKeywordSearch) {
       overlayEntry?.remove();
       
       overlayEntry = OverlayEntry(
@@ -122,7 +122,7 @@ class PdfViewerPage extends StatelessWidget {
               elevation: 4,
               child: Container(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.3,
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -136,30 +136,64 @@ class PdfViewerPage extends StatelessWidget {
                   ],
                 ),
                 child: Obx(() {
-                  final files = controller.filteredFiles;
-                  if (files.isEmpty) {
-                    return const ListTile(
-                      title: Text('검색 결과가 없습니다'),
+                  if (isKeywordSearch) {
+                    final results = controller.keywordSearchResults;
+                    if (results.isEmpty) {
+                      return const ListTile(
+                        title: Text('검색 결과가 없습니다'),
+                      );
+                    }
+                    return ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: results.length,
+                      itemBuilder: (context, index) {
+                        final result = results[index];
+                        return ListTile(
+                          title: Text(result['col_name']),
+                          subtitle: Text(result['col_keyword']),
+                          onTap: () {
+                            final targetFile = controller.pdfFiles.firstWhere(
+                              (file) => file.contains(result['col_name']),
+                              orElse: () => controller.currentFile.value,
+                            );
+                            controller.setCurrentFile(targetFile);
+                            searchController.text = targetFile.split('/').last.replaceAll('.pdf', '');
+                            overlayEntry?.remove();
+                            overlayEntry = null;
+                          },
+                        );
+                      },
+                    );
+                  } else {
+                    final files = controller.filteredFiles;
+                    if (files.isEmpty) {
+                      return const ListTile(
+                        title: Text('검색 결과가 없습니다'),
+                      );
+                    }
+                    return ListView.builder(
+                      padding: EdgeInsets.zero,
+                      shrinkWrap: true,
+                      itemCount: files.length,
+                      itemBuilder: (context, index) {
+                        final file = files[index];
+                        final fileName = file.split('/').last.replaceAll('.pdf', '');
+                        return ListTile(
+                          title: Text(
+                            fileName,
+                            textAlign: TextAlign.left,
+                          ),
+                          onTap: () {
+                            controller.setCurrentFile(file);
+                            searchController.text = fileName;
+                            overlayEntry?.remove();
+                            overlayEntry = null;
+                          },
+                        );
+                      },
                     );
                   }
-                  return ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: files.length,
-                    itemBuilder: (context, index) {
-                      final file = files[index];
-                      final fileName = file.split('/').last.replaceAll('.pdf', '');
-                      return ListTile(
-                        title: Text(fileName),
-                        onTap: () {
-                          controller.setCurrentFile(file);
-                          searchController.text = fileName;
-                          overlayEntry?.remove();
-                          overlayEntry = null;
-                        },
-                      );
-                    },
-                  );
                 }),
               ),
             ),
@@ -188,13 +222,102 @@ class PdfViewerPage extends StatelessWidget {
               children: [
                 // 칼럼 검색
                 Expanded(
+                  child: Stack(
+                    children: [
+                      CompositedTransformTarget(
+                        link: layerLink,
+                        child: TextField(
+                          controller: searchController,
+                          maxLength: 20,
+                          decoration: InputDecoration(
+                            hintText: '칼럼 검색...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            counterText: '',
+                          ),
+                          onChanged: (value) {
+                            controller.filterFiles(value);
+                            if (value.isNotEmpty) {
+                              showSearchResults(context, context.findRenderObject() as RenderBox, false);
+                            } else {
+                              overlayEntry?.remove();
+                              overlayEntry = null;
+                            }
+                          },
+                          onTap: () {
+                            if (searchController.text.isNotEmpty) {
+                              showSearchResults(context, context.findRenderObject() as RenderBox, false);
+                            }
+                          },
+                        ),
+                      ),
+                      if (searchController.text.isNotEmpty)
+                        Positioned(
+                          top: 48,
+                          left: 0,
+                          right: 0,
+                          child: Material(
+                            elevation: 4,
+                            child: Container(
+                              constraints: BoxConstraints(
+                                maxHeight: MediaQuery.of(context).size.height * 0.5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Obx(() {
+                                final files = controller.filteredFiles;
+                                if (files.isEmpty) {
+                                  return const ListTile(
+                                    title: Text('검색 결과가 없습니다'),
+                                  );
+                                }
+                                return ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: files.length,
+                                  itemBuilder: (context, index) {
+                                    final file = files[index];
+                                    final fileName = file.split('/').last.replaceAll('.pdf', '');
+                                    return ListTile(
+                                      title: Text(
+                                        fileName,
+                                        textAlign: TextAlign.left,
+                                      ),
+                                      onTap: () {
+                                        controller.setCurrentFile(file);
+                                        searchController.text = fileName;
+                                      },
+                                    );
+                                  },
+                                );
+                              }),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 키워드 검색
+                Expanded(
                   child: CompositedTransformTarget(
                     link: layerLink,
                     child: TextField(
-                      controller: searchController,
                       maxLength: 20,
                       decoration: InputDecoration(
-                        hintText: '칼럼 검색...',
+                        hintText: '키워드 검색...',
                         prefixIcon: const Icon(Icons.search_rounded),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -203,37 +326,20 @@ class PdfViewerPage extends StatelessWidget {
                         counterText: '',
                       ),
                       onChanged: (value) {
-                        controller.filterFiles(value);
+                        controller.searchKeywords(value);
                         if (value.isNotEmpty) {
-                          showSearchResults(context, context.findRenderObject() as RenderBox);
+                          showSearchResults(context, context.findRenderObject() as RenderBox, true);
                         } else {
                           overlayEntry?.remove();
                           overlayEntry = null;
                         }
                       },
                       onTap: () {
-                        if (searchController.text.isNotEmpty) {
-                          showSearchResults(context, context.findRenderObject() as RenderBox);
+                        if (controller.keywordSearchResults.isNotEmpty) {
+                          showSearchResults(context, context.findRenderObject() as RenderBox, true);
                         }
                       },
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // 키워드 검색
-                Expanded(
-                  child: TextField(
-                    maxLength: 20,
-                    decoration: InputDecoration(
-                      hintText: '키워드 검색...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      counterText: '',
-                    ),
-                    onChanged: controller.searchKeywords,
                   ),
                 ),
               ],
@@ -242,56 +348,8 @@ class PdfViewerPage extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                // 파일 목록
-                Expanded(
-                  flex: 1,
-                  child: Obx(() {
-                    final files = controller.filteredFiles;
-                    return ListView.builder(
-                      itemCount: files.length,
-                      itemBuilder: (context, index) {
-                        final file = files[index];
-                        final fileName = file.split('/').last.replaceAll('.pdf', '');
-                        return ListTile(
-                          title: Text(fileName),
-                          onTap: () {
-                            controller.setCurrentFile(file);
-                            searchController.text = fileName;
-                            overlayEntry?.remove();
-                            overlayEntry = null;
-                          },
-                        );
-                      },
-                    );
-                  }),
-                ),
-                // 키워드 검색 결과
-                Expanded(
-                  flex: 1,
-                  child: Obx(() {
-                    return ListView.builder(
-                      itemCount: controller.keywordSearchResults.length,
-                      itemBuilder: (context, index) {
-                        final result = controller.keywordSearchResults[index];
-                        return ListTile(
-                          title: Text(result['col_name']),
-                          subtitle: Text(result['col_keyword']),
-                          onTap: () {
-                            final targetFile = controller.pdfFiles.firstWhere(
-                              (file) => file.contains(result['col_name']),
-                              orElse: () => controller.currentFile.value,
-                            );
-                            controller.setCurrentFile(targetFile);
-                            searchController.text = targetFile.split('/').last.replaceAll('.pdf', '');
-                          },
-                        );
-                      },
-                    );
-                  }),
-                ),
                 // PDF 뷰어
                 Expanded(
-                  flex: 3,
                   child: Obx(() {
                     final currentFile = controller.currentFile.value;
                     if (currentFile.isEmpty) {
@@ -306,7 +364,7 @@ class PdfViewerPage extends StatelessWidget {
                         controller.setInitialZoomLevel(
                           pageSize.width,
                           pageSize.height,
-                          viewerSize.width * 0.6, // PDF 뷰어가 차지하는 실제 너비
+                          viewerSize.width, // 전체 너비 사용
                           viewerSize.height - 120, // 상단 바와 검색창 높이를 고려
                         );
                       },
